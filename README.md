@@ -4,6 +4,31 @@ An AI research assistant built from cooperating agents using **Google's Agent De
 
 ## Project Overview
 
+### Project DeepDive
+
+In this project, you are the Lead AI Architect at a data intelligence firm. Your clients are senior executives who need deep, accurate technical briefings, and they need them fast.
+
+Your VP of Engineering has just put a new ticket on your desk: **Project DeepDive**.
+
+**The goal:** build an agentic AI research assistant. When asked a hard question, it shouldn't just guess. It should:
+
+1. Plan where to look.
+2. Read papers and websites (simulated tools in this project).
+3. Draft an answer.
+4. Critique its own work, and fix it if it doesn't meet the criteria.
+5. Fact-check the claims.
+6. Format the bibliography.
+
+You'll use Google ADK (Agent Development Kit) to build a team of research agents that produces a research report.
+
+### Your mission
+
+You're given a project-starter codebase. The infrastructure (the boilerplate code) is in place, but the agent implementation is missing.
+
+The codebase contains `TODO` markers. Your job is to add ADK agents and agentic workflow patterns so the research assistant works.
+
+### Architecture
+
 The assistant is a 7-stage `SequentialAgent` pipeline:
 
 | # | Stage | ADK pattern | File |
