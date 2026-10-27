@@ -1,0 +1,13 @@
+# Secrets
+.env
+service-account-key.json
+*.json.key
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Local artifacts
+submission.zip
+.DS_Store
