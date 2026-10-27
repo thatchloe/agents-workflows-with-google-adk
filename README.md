@@ -49,8 +49,8 @@ query ─► Router ─► ┌ web_search ─────┐
 
 ### Patterns
 
-- **Iterative refinement (`LoopAgent`):** `research_refinement_loop` runs `[researcher, critic]`. The critic scores each draft from 0 to 1 and gives feedback. The researcher revises using that feedback until the score reaches `QUALITY_THRESHOLD` or `MAX_ITERATIONS` is used up.
-- **Fan-out / fan-in (`ParallelAgent` + `SequentialAgent`):** `parallel_source_searches` runs the three search agents at the same time. `source_gathering_workflow` then hands their combined results to `source_aggregator`, which de-duplicates and ranks them.
+- **Iterative refinement (`LoopAgent`):** `research_refinement_loop` runs `[researcher, critic]` and is executed by the ADK `Runner` (`run_async()`), so the `LoopAgent` itself controls iteration. The critic scores each draft from 0 to 1 and gives feedback. Its `after_agent_callback` sets `escalate` once the score reaches `QUALITY_THRESHOLD`, and ADK then ends the loop; otherwise the loop runs until `MAX_ITERATIONS`. Earlier drafts and critic feedback reach the researcher through the shared ADK session history.
+- **Fan-out / fan-in (`ParallelAgent` + `SequentialAgent`):** `source_gathering_workflow` is also executed by the ADK `Runner`. Its `ParallelAgent`, `parallel_source_searches`, runs the three search agents as concurrent async model calls. The `SequentialAgent` starts `source_aggregator` only after all three finish; it de-duplicates and ranks the results, which it reads from the session.
 - **Deterministic routing (`LlmAgent`):** `domain_classifier` uses `temperature=0.3` and JSON output, so the same query classifies the same way on every run.
 - **Grounding:** the top aggregated sources from Stage 2 go into the research loop, so the researcher writes from the gathered evidence.
 - **Monitoring:** `PerformanceEvaluator` records quality, run time, source count, iterations, fact checks and citations. It reports a health status and any bottlenecks.
@@ -65,6 +65,7 @@ query ─► Router ─► ┌ web_search ─────┐
 │   ├── router.py          # DomainClassifierAgent / QueryComplexityAgent (LlmAgent)
 │   ├── source_gatherer.py # Search agents, aggregator, ParallelAgent + SequentialAgent
 │   ├── researcher.py      # ResearcherAgent, ResearchCriticAgent, LoopAgent
+│   ├── adk_execution.py   # Runs composed ADK agents through InMemoryRunner
 │   ├── orchestrator.py    # 7-stage workflow + report generation
 │   ├── evaluator.py       # PerformanceMetrics / PerformanceEvaluator
 │   └── other_agents.py    # Classifier, fact checker, synthesizer, citation agents
@@ -156,11 +157,11 @@ Configuration: `MODEL_NAME=gemini-3.5-flash-lite`, `CRITIC_MODEL=gemini-3.5-flas
 | Metric | Value |
 |---|---|
 | Domain (router) | biology (confidence 0.95) |
-| Sources found (web / arXiv / Scholar) | 18 (7 / 5 / 6) |
-| Research iterations | 2 (critic score 0.92 → 0.95) |
-| Credibility score | 0.94 |
+| Sources found (web / arXiv / Scholar) | 17 (6 / 5 / 6) |
+| Research iterations | 2 (critic score 0.78 → 0.96) |
+| Credibility score | 0.92 |
 | Citations | 10 |
-| Execution time | ~48 s |
+| Execution time | ~37 s |
 | Health status | excellent |
 
 The full report is in [`research_report.md`](research_report.md). The terminal output is in [`screenshots/`](screenshots/):
@@ -173,9 +174,9 @@ The full report is in [`research_report.md`](research_report.md). The terminal o
 ### Observations
 
 - **Router:** Classified the query as `biology` with 0.95 confidence, and gave the same result on repeated runs, as expected with low temperature.
-- **ParallelAgent:** All three searches finished before aggregation started (fan-out, then fan-in). The aggregator kept the top 13 of 18 sources for the research stage.
-- **LoopAgent:** The first draft scored 0.92. That rates as "excellent", but it was below the 0.95 threshold, so the critic's feedback went back to the researcher. The revised draft scored 0.95 and the loop stopped after 2 of 3 iterations.
+- **ParallelAgent:** The searches genuinely overlap. All three started within 0.1 s of each other (t=0.1–0.2 s) and finished at 3.4, 3.9 and 4.9 s. The aggregator started only at t=4.9 s, after the last search completed (fan-out, then fan-in). Gathering takes about as long as the slowest search instead of the sum of all three. The aggregator kept the top 13 of 17 sources for the research stage.
+- **LoopAgent:** The first draft scored 0.78 ("needs improvement"), so the critic didn't escalate and the `LoopAgent` started another iteration. The researcher's iteration notes confirm it used the critic's feedback from the session history. The revised draft scored 0.96, the critic escalated, and ADK ended the loop after 2 of 3 iterations.
 - **Critic strictness matters:** With `gemini-3.5-flash-lite` as the critic, every draft scored 0.95 on the first pass, under both the default 0.80 rule and higher thresholds. Stronger critic models (`gemini-3.5-flash`, `gemini-3.8-flash`) scored the same draft 0.88–0.92. So the critic runs on `gemini-3.5-flash` while the other agents stay on the faster `flash-lite`.
 - **Grounding helps:** Passing the Stage 2 sources into the loop produced strong first drafts. The final credibility score was 0.94.
 - **Token limits:** Newer "thinking" Gemini models spend part of `max_output_tokens` on reasoning. This cut the JSON responses short and silently produced 0 sources. The fix was a non-thinking main model, plus higher limits: 2048 for the search agents, 3072 for citations, and 4096 for the critic.
-- **Performance:** The whole run took about 48 s, and the evaluator rated it "excellent". Using a thinking model as the critic adds roughly 15 s compared with all-flash-lite.
+- **Performance:** The whole run took about 37 s, and the evaluator rated it "excellent". That is roughly 11 s faster than the earlier version, which looked parallel but ran the searches one after another. Using a thinking model as the critic adds time compared with all-flash-lite.

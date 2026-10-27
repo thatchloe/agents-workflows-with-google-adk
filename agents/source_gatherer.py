@@ -1,9 +1,11 @@
 import json
-import asyncio
+import time
 from typing import Dict, Any, List
 from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
+from google.adk.agents.callback_context import CallbackContext
 from google import genai
 from google.genai.types import GenerateContentConfig
+from agents.adk_execution import run_adk_agent, parse_json_output
 
 
 class WebSearchAgent(LlmAgent):
@@ -298,6 +300,37 @@ user: Please aggregate these search results:
             }
 
 
+# ----------------------------------------------------------------------------
+# Callbacks: timestamped logs showing the fan-out overlap and the fan-in
+# ----------------------------------------------------------------------------
+
+SEARCH_OUTPUT_KEYS = {
+    "web_search": "web_results",
+    "arxiv_search": "arxiv_results",
+    "scholar_search": "scholar_results",
+}
+
+
+def _elapsed(callback_context: CallbackContext) -> float:
+    return time.time() - callback_context.state.get('workflow_start', time.time())
+
+
+def _agent_started(callback_context: CallbackContext) -> None:
+    name = callback_context.agent_name
+    if name == "source_aggregator":
+        print(f"\n   Stage 2: Aggregator (fan-in) - all searches complete")
+        print(f"      → {name} aggregating results... (t={_elapsed(callback_context):.1f}s)")
+    else:
+        print(f"      → {name} started (t={_elapsed(callback_context):.1f}s)")
+
+
+def _search_finished(callback_context: CallbackContext) -> None:
+    name = callback_context.agent_name
+    result = parse_json_output(callback_context.state.get(SEARCH_OUTPUT_KEYS[name]))
+    print(f"      ✓ {name}: Found {result.get('total_found', 0)} sources "
+          f"(t={_elapsed(callback_context):.1f}s)")
+
+
 def create_source_gathering_workflow(model: str = "gemini-2.0-flash") -> SequentialAgent:
     """
     Creates a SequentialAgent with ParallelAgent for source gathering.
@@ -313,6 +346,14 @@ def create_source_gathering_workflow(model: str = "gemini-2.0-flash") -> Sequent
     arxiv_search = ArxivSearchAgent(model=model)
     scholar_search = ScholarSearchAgent(model=model)
     aggregator = SourceAggregatorAgent(model=model)
+
+    # Store each agent's output in session state and log its start/finish
+    for search_agent in (web_search, arxiv_search, scholar_search):
+        search_agent.output_key = SEARCH_OUTPUT_KEYS[search_agent.name]
+        search_agent.before_agent_callback = _agent_started
+        search_agent.after_agent_callback = _search_finished
+    aggregator.output_key = "aggregated_sources"
+    aggregator.before_agent_callback = _agent_started
 
     # TODO 3: Create ParallelAgent for concurrent searches
     #
@@ -348,9 +389,9 @@ async def execute_source_gathering(
     Execute parallel source gathering workflow using ADK ParallelAgent + SequentialAgent.
 
     EXECUTION:
-    - Manually executes workflow logic 
-    - Uses genai.Client directly for real LLM output
-    - Uses asyncio.gather for true parallelism
+    - Runs the SequentialAgent through the ADK Runner (workflow.run_async())
+    - The ParallelAgent fans out the three searches as concurrent async model calls
+    - The aggregator runs only after every search has completed (fan-in)
 
     Args:
         client: Configured genai.Client
@@ -380,42 +421,23 @@ async def execute_source_gathering(
 
     print(f"   Stage 2 (Aggregator): {aggregator.name}")
 
-    # Manually execute the workflow logic 
-    print(f"\n   Executing workflow logic (execution)...")
-
-    # STAGE 1: Execute parallel searches (fan-out)
+    print(f"\n   Executing SequentialAgent via ADK Runner (workflow.run_async())...")
     print(f"\n   Stage 1: ParallelAgent (fan-out)")
 
-    web_search = parallel_stage.sub_agents[0]
-    arxiv_search = parallel_stage.sub_agents[1]
-    scholar_search = parallel_stage.sub_agents[2]
+    # The SequentialAgent runs the ParallelAgent, then the aggregator. The
+    # aggregator reads the three search results from the shared session history.
+    _, state = await run_adk_agent(
+        workflow,
+        message=f"Search query: {query}\n\nGenerate realistic search results for this query.",
+        initial_state={'workflow_start': time.time()}
+    )
 
-    async def run_web():
-        print(f"      → {web_search.name} running...")
-        result = web_search.search(client, query)
-        print(f"      ✓ {web_search.name}: Found {result.get('total_found', 0)} sources")
-        return result
-
-    async def run_arxiv():
-        print(f"      → {arxiv_search.name} running...")
-        result = arxiv_search.search(client, query)
-        print(f"      ✓ {arxiv_search.name}: Found {result.get('total_found', 0)} sources")
-        return result
-
-    async def run_scholar():
-        print(f"      → {scholar_search.name} running...")
-        result = scholar_search.search(client, query)
-        print(f"      ✓ {scholar_search.name}: Found {result.get('total_found', 0)} sources")
-        return result
-
-    # Run all searches in parallel (parallel execution with asyncio.gather)
-    search_results = await asyncio.gather(run_web(), run_arxiv(), run_scholar())
-
-    # STAGE 2: Aggregate results (fan-in)
-    print(f"\n   Stage 2: Aggregator (fan-in)")
-    print(f"      → {aggregator.name} aggregating results...")
-
-    aggregated = aggregator.aggregate(client, list(search_results))
+    search_results = [parse_json_output(state.get(key)) for key in SEARCH_OUTPUT_KEYS.values()]
+    aggregated = parse_json_output(state.get('aggregated_sources'))
+    aggregated.setdefault('total_sources', 0)
+    aggregated.setdefault('unique_sources', 0)
+    aggregated.setdefault('top_sources', [])
+    aggregated.setdefault('sources_by_type', {'web': 0, 'arxiv': 0, 'scholar': 0})
 
     print(f"      ✓ Total: {aggregated.get('total_sources', 0)} sources")
     print(f"      ✓ Unique: {aggregated.get('unique_sources', 0)} sources")
@@ -425,10 +447,10 @@ async def execute_source_gathering(
 
     return {
         'query': query,
-        'raw_searches': list(search_results),
+        'raw_searches': search_results,
         'aggregated_sources': aggregated,
         'workflow': workflow,  # Include the actual SequentialAgent object
         'parallel_agent': parallel_stage,  # Include the actual ParallelAgent object
         'pattern': 'ADK ParallelAgent + SequentialAgent',
-        'execution_mode': 'direct'
+        'execution_mode': 'adk_runner'
     }

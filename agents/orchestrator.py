@@ -47,7 +47,7 @@ async def execute_research_workflow(
     print("="*80)
     print(f"\n Research Query: {query}")
     print(f"   Pattern: SequentialAgent")
-    print(f"   Execution: (ADK agents + agent.run_async())")
+    print(f"   Execution: ADK Runner + agent.run_async() for workflow agents")
     print(f"   Model: {model}")
 
     # Track execution time for performance evaluation
@@ -57,7 +57,7 @@ async def execute_research_workflow(
         'query': query,
         'model': model,
         'pattern': 'SequentialAgent',
-        'execution_mode': 'direct'
+        'execution_mode': 'adk_runner'
     }
 
     # ========================================================================
@@ -180,8 +180,10 @@ async def execute_research_workflow(
     print(f"   • Citations: {citations.get('total_citations', 0)}")
     print(f"\n  Execution Method:")
     print(f"   ✓ All agents inherit from ADK base classes")
-    print(f"   ✓ Executed via agent.run_async() with genai.Client")
-    print(f"   ✓ No ADK server deployment required")
+    print(f"   ✓ Source gathering: SequentialAgent[ParallelAgent -> aggregator] executed by ADK Runner")
+    print(f"   ✓ Research refinement: LoopAgent executed by ADK Runner (critic escalates to stop)")
+    print(f"   ✓ Classification, fact check, synthesis, citations: LlmAgent config via genai.Client")
+    print(f"   ✓ In-memory ADK Runner - no ADK server deployment required")
     print(f"   ✓ Real LLM output from Vertex AI Gemini")
 
     # ========================================================================
@@ -338,8 +340,8 @@ def generate_research_report(workflow_results: Dict[str, Any]) -> str:
 This research report was generated using an ADK-based multi-agent system with the following workflow:
 
 1. **Domain Classification** 
-2. **Parallel Source Gathering** 
-3. **Iterative Research Refinement** 
+2. **Parallel Source Gathering** (SequentialAgent + ParallelAgent, executed by the ADK Runner)
+3. **Iterative Research Refinement** (LoopAgent, executed by the ADK Runner)
 4. **Fact Checking** (LlmAgent validation)
 5. **Synthesis** (LlmAgent integration)
 6. **Citation Formatting** (LlmAgent academic standards)

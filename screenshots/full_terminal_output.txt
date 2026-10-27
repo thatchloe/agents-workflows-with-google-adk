@@ -31,7 +31,7 @@ AI RESEARCH ASSISTANT - EXECUTION
 
  Research Query: How has CRISPR gene editing changed crop breeding in agriculture?
    Pattern: SequentialAgent
-   Execution: (ADK agents + agent.run_async())
+   Execution: ADK Runner + agent.run_async() for workflow agents
    Model: gemini-3.5-flash-lite
 
 --------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ STAGE 1: Domain Classification
    ✓ Domain: biology
    ✓ Confidence: 0.95
    ✓ Complexity: medium
-   ✓ Recommended sources: scholar, pubmed, web
+   ✓ Recommended sources: scholar, web, pubmed
 
 --------------------------------------------------------------------------------
 STAGE 2: Source Gathering
@@ -56,20 +56,20 @@ STAGE 2: Source Gathering
       → Sub-agents: 3 parallel searches
    Stage 2 (Aggregator): source_aggregator
 
-   Executing workflow logic (execution)...
+   Executing SequentialAgent via ADK Runner (workflow.run_async())...
 
    Stage 1: ParallelAgent (fan-out)
-      → web_search running...
-      ✓ web_search: Found 7 sources
-      → arxiv_search running...
-      ✓ arxiv_search: Found 5 sources
-      → scholar_search running...
-      ✓ scholar_search: Found 6 sources
+      → web_search started (t=0.1s)
+      → arxiv_search started (t=0.2s)
+      → scholar_search started (t=0.2s)
+      ✓ web_search: Found 6 sources (t=3.4s)
+      ✓ scholar_search: Found 6 sources (t=3.9s)
+      ✓ arxiv_search: Found 5 sources (t=4.9s)
 
-   Stage 2: Aggregator (fan-in)
-      → source_aggregator aggregating results...
-      ✓ Total: 18 sources
-      ✓ Unique: 18 sources
+   Stage 2: Aggregator (fan-in) - all searches complete
+      → source_aggregator aggregating results... (t=4.9s)
+      ✓ Total: 17 sources
+      ✓ Unique: 17 sources
       ✓ Top sources: 13
    ✅ Workflow execution completed
 
@@ -85,29 +85,29 @@ STAGE 3: Research Refinement
    Type: LoopAgent
    Sub-agents: 2 (researcher + critic)
 
-   🔄 Executing LoopAgent logic (execution)...
+   🔄 Executing LoopAgent via ADK Runner (loop_agent.run_async())...
 
    Iteration 1/3
       → researcher generating answer...
       ✓ Answer generated (confidence: high)
       → critic evaluating quality...
-      ✓ Quality: excellent (score: 0.92)
+      ✓ Quality: needs_improvement (score: 0.78)
       Quality below threshold - Continue refining...
-      Feedback: The answer is highly accurate, well-structured, and provides excellent concrete ...
+      Feedback: The answer is scientifically strong and accurately captures the biological and a...
 
    Iteration 2/3
       → researcher generating answer...
       ✓ Answer generated (confidence: high)
       → critic evaluating quality...
-      ✓ Quality: excellent (score: 0.95)
-      Quality threshold met - Loop terminated
+      ✓ Quality: excellent (score: 0.96)
+      Quality threshold met - critic escalates, LoopAgent terminates
    LoopAgent execution completed (2 iterations)
 
 --------------------------------------------------------------------------------
 STAGE 4: Fact Checking (LlmAgent)
 --------------------------------------------------------------------------------
-   ✓ Credibility Score: 0.94
-   ✓ Verified Claims: 5
+   ✓ Credibility Score: 0.92
+   ✓ Verified Claims: 4
    ✓ Questionable Claims: 1
 
 --------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ STAGE 5: Synthesis (LlmAgent)
    ✓ Synthesis completed
    ✓ Key Insights: 3
    ✓ Themes: 3
-   ✓ Coherence Score: 0.94
+   ✓ Coherence Score: 0.95
 
 --------------------------------------------------------------------------------
 STAGE 6: Citation Generation (LlmAgent)
@@ -134,22 +134,24 @@ WORKFLOW COMPLETED
 . Results Summary:
    • Query: How has CRISPR gene editing changed crop breeding in agriculture?
    • Domain: biology
-   • Sources Found: 18
+   • Sources Found: 17
    • Research Iterations: 2
-   • Credibility Score: 0.94
+   • Credibility Score: 0.92
    • Citations: 10
 
   Execution Method:
    ✓ All agents inherit from ADK base classes
-   ✓ Executed via agent.run_async() with genai.Client
-   ✓ No ADK server deployment required
+   ✓ Source gathering: SequentialAgent[ParallelAgent -> aggregator] executed by ADK Runner
+   ✓ Research refinement: LoopAgent executed by ADK Runner (critic escalates to stop)
+   ✓ Classification, fact check, synthesis, citations: LlmAgent config via genai.Client
+   ✓ In-memory ADK Runner - no ADK server deployment required
    ✓ Real LLM output from Vertex AI Gemini
 
 --------------------------------------------------------------------------------
 STAGE 7: Performance Evaluation
 --------------------------------------------------------------------------------
-   ✓ Execution Time: 47.94s
-   ✓ Performance Score: 0.95
+   ✓ Execution Time: 36.93s
+   ✓ Performance Score: 0.96
    ✓ Health Status: excellent
    ✓ Queries Processed: 1
 
@@ -163,24 +165,24 @@ RESEARCH REPORT PREVIEW
 # Research Report: How has CRISPR gene editing changed crop breeding in agriculture?
 
 ## Executive Summary
-CRISPR gene editing has revolutionized agriculture by drastically accelerating crop breeding timelines, enhancing climate and pathogen resilience, and improving nutritional profiles, though commercial success still hinges on navigating regulatory shifts and public perception.
+CRISPR gene editing has transformed crop breeding by delivering unprecedented precision, accelerating development timelines, and enabling climate-resilient traits without foreign DNA. Concurrently, it is reshaping agricultural economics and benefiting from increasingly streamlined global regulatory frameworks.
 
 **Domain:** biology
-**Credibility Score:** 0.94/1.00
-**Sources Consulted:** 18
+**Credibility Score:** 0.92/1.00
+**Sources Consulted:** 17
 **Research Iterations:** 2
 
 ---
 
 ## Research Findings
 
-CRISPR gene editing has profoundly revolutionized modern agriculture by shifting crop breeding from a decades-long endeavor into a process achievable within just a few growing seasons. Through foundational technologies and advanced iterations such as base and prime editing, scientists can now execute precise single-nucleotide modifications without inducing double-strand DNA breaks, thereby minimizing off-target effects and maximizing accuracy. These capabilities have unlocked unprecedented potential for addressing severe environmental challenges, facilitating multiplex gene editing that simultaneously targets quantitative trait loci for drought tolerance, heat stress resilience, and broad-spectrum pathogen resistance across vital staple and orphan crops.
+CRISPR gene editing has fundamentally revolutionized agricultural crop breeding by replacing the time-consuming trial-and-error methods of traditional breeding with unprecedented genomic precision. By enabling targeted modifications within a plant's endogenous genome without the introduction of foreign DNA, the technology successfully circumvents many of the biological barriers and public acceptance hurdles historically faced by older transgenic GMO approaches. Furthermore, the advent of multiplexed editing systems has unlocked the capacity to simultaneously alter multiple loci, thereby accelerating the development of complex quantitative traits essential for climate resilience, such as superior drought, heat, and salinity tolerance.
 
-Beyond agronomic resilience, CRISPR applications have driven significant advancements in global food security and nutritional enhancement. Metabolic pathway engineering, facilitated by systems like CRISPR-Cas12a, has successfully upregulated key nutrients such as provitamin A and essential amino acids in vulnerable crops while simultaneously reducing the agricultural sector's reliance on chemical pesticides. This dual focus on nutritional quality and environmental sustainability positions gene editing as a cornerstone of future agricultural productivity.
+From an economic and commercial perspective, CRISPR is actively democratizing the agricultural sector. The lowered costs and increased accessibility of these genetic tools empower a broader range of researchers and smaller entities to innovate, shifting market dynamics away from heavy consolidation. This democratization is bolstered by a shifting global regulatory landscape, wherein an increasing number of jurisdictions are modernizing their oversight frameworks to differentiate between plants with edited native genes and traditional GMOs, ultimately streamlining the pathway from laboratory to commercialization.
 
-Despite these profound scientific breakthroughs, the commercial trajectory of CRISPR-edited crops remains dependent on the dual forces of regulatory evo
+Ultimately, the convergence of technological precision, economic accessibility,
 
-... (report continues, total 6801 characters)
+... (report continues, total 6567 characters)
 
 Full report saved to: /Users/anh/Downloads/project-starter/research_report.md
 
@@ -191,8 +193,8 @@ EXECUTION SUMMARY
   Workflow Metrics:
    • Total Stages: 6
    • Research Iterations: 2
-   • Sources Found: 18
-   • Credibility Score: 0.94
+   • Sources Found: 17
+   • Credibility Score: 0.92
    • Citations: 10
 
  Execution successful!

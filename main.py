@@ -37,6 +37,11 @@ async def main():
                 project=config.project_id,
                 location=config.location
             )
+            # ADK agents executed through the Runner build their own client
+            # from these environment variables
+            os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+            os.environ.setdefault("GOOGLE_CLOUD_PROJECT", config.project_id)
+            os.environ.setdefault("GOOGLE_CLOUD_LOCATION", config.location)
             print(f"   ✓ Client initialized with Vertex AI")
         else:
             print("\n❌ No authentication method available")
